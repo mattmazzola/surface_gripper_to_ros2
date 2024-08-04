@@ -1,14 +1,21 @@
-# Copyright (c) 2022-2023, NVIDIA CORPORATION. All rights reserved.
-#
-# NVIDIA CORPORATION and its licensors retain all intellectual property
-# and proprietary rights in and to this software, related documentation
-# and any modifications thereto. Any use, reproduction, disclosure or
-# distribution of this software and related documentation without an express
-# license agreement from NVIDIA CORPORATION is strictly prohibited.
-#
+from abc import ABC
+
+import numpy as np
+import omni.kit.commands
+import omni.log
+import omni.timeline
+from omni.isaac.core.objects.cone import DynamicCone
+from omni.isaac.core.objects.cuboid import DynamicCuboid
+from omni.isaac.core.objects.ground_plane import GroundPlane
+from omni.isaac.core.utils.stage import (
+    create_new_stage,
+    get_current_stage,
+)
+from omni.isaac.core.utils.viewports import set_camera_view
+from pxr import Sdf, UsdLux
 
 
-class ScenarioTemplate:
+class ScenarioBase(ABC):
     def __init__(self):
         pass
 
@@ -18,129 +25,75 @@ class ScenarioTemplate:
     def teardown_scenario(self):
         pass
 
-    def update_scenario(self):
+    def on_physics_step(self):
         pass
 
 
-import numpy as np
-from omni.isaac.core.utils.types import ArticulationAction
-
-"""
-This scenario takes in a robot Articulation and makes it move through its joint DOFs.
-Additionally, it adds a cuboid prim to the stage that moves in a circle around the robot.
-
-The particular framework under which this scenario operates should not be taken as a direct
-recomendation to the user about how to structure their code.  In the simple example put together
-in this template, this particular structure served to improve code readability and separate
-the logic that runs the example from the UI design.
-"""
-
-
-class ExampleScenario(ScenarioTemplate):
+class SurfaceGripperToRos2Scenario(ScenarioBase):
     def __init__(self):
-        self._object = None
-        self._articulation = None
+        omni.log.info("__init__")
+        super().__init__()
 
-        self._running_scenario = False
+        self.total_time = 0.0
+        self.color_netural = [1, 1, 1]
+        self.color_blue = [0.0, 0.0, 1.0]
+        self.color_red = [1.0, 0.0, 0.0]
+        self.color_green = [0.0, 1.0, 0.0]
 
-        self._time = 0.0  # s
+    def init_scenario(self):
+        omni.log.info("init_scenario")
+        create_new_stage()
 
-        self._object_radius = 0.5  # m
-        self._object_height = 0.5  # m
-        self._object_frequency = 0.25  # Hz
+    async def setup_scenario(self):
+        omni.log.info("setup_scenario")
 
-        self._joint_index = 0
-        self._max_joint_speed = 4  # rad/sec
-        self._lower_joint_limits = None
-        self._upper_joint_limits = None
+        GroundPlane("/World/ground_plane")
 
-        self._joint_time = 0
-        self._path_duration = 0
-        self._calculate_position = lambda t, x: 0
-        self._calculate_velocity = lambda t, x: 0
+        stage = get_current_stage()
+        dome_light: UsdLux.DomeLight = UsdLux.DomeLight.Define(stage, "/World/dome_light")
+        dome_light.CreateIntensityAttr(1000)
 
-    def setup_scenario(self, articulation, object_prim):
-        self._articulation = articulation
-        self._object = object_prim
+        cube = DynamicCuboid("/World/cube", position=[0, 0, 0.5])
+        cube.prim.GetAttribute("primvars:displayColor").Set(np.array(self.color_blue))
+        # Remove the default material assigned so that primvars:displayColor can be seen
+        omni.kit.commands.execute(
+            "BindMaterial",
+            material_path=None,
+            prim_path=[cube.prim_path],
+            strength=["weakerThanDescendants"],
+            material_purpose="",
+        )
 
-        self._initial_object_position = self._object.get_world_pose()[0]
-        self._initial_object_phase = np.arctan2(self._initial_object_position[1], self._initial_object_position[0])
-        self._object_radius = np.linalg.norm(self._initial_object_position[:2])
+        cone = DynamicCone("/World/cone", position=[0, 0, 1.5], scale=[0.5, 0.5, 1])
+        cone.prim.GetAttribute("primvars:displayColor").Set(np.array(self.color_netural))
+        # Remove the default material assigned so that primvars:displayColor can be seen
+        omni.kit.commands.execute(
+            "BindMaterial",
+            material_path=None,
+            prim_path=[cone.prim_path],
+            strength=["weakerThanDescendants"],
+            material_purpose="",
+        )
 
-        self._running_scenario = True
+        # Set the refinement level of the cone to improve the visual quality
+        cone.prim.CreateAttribute("refinementEnableOverride", Sdf.ValueTypeNames.Bool)
+        cone.prim.GetAttribute("refinementEnableOverride").Set(True)
+        cone.prim.CreateAttribute("refinementLevel", Sdf.ValueTypeNames.Int)
+        cone.prim.GetAttribute("refinementLevel").Set(2)
 
-        self._joint_index = 0
-        self._lower_joint_limits = articulation.dof_properties["lower"]
-        self._upper_joint_limits = articulation.dof_properties["upper"]
-
-        # teleport robot to lower joint range
-        epsilon = 0.001
-        articulation.set_joint_positions(self._lower_joint_limits + epsilon)
-
-        self._derive_sinusoid_params(0)
+        set_camera_view(
+            eye=[3.0, 4.3, 3.2],
+            target=[0, 0, 1],
+            camera_prim_path="/OmniverseKit_Persp",
+        )
 
     def teardown_scenario(self):
-        self._time = 0.0
-        self._object = None
-        self._articulation = None
-        self._running_scenario = False
+        omni.log.info("teardown_scenario")
 
-        self._joint_index = 0
-        self._lower_joint_limits = None
-        self._upper_joint_limits = None
-
-        self._joint_time = 0
-        self._path_duration = 0
-        self._calculate_position = lambda t, x: 0
-        self._calculate_velocity = lambda t, x: 0
-
-    def update_scenario(self, step: float):
-        if not self._running_scenario:
+    def on_physics_step(self, step_duration: float):
+        if not omni.timeline.get_timeline_interface().is_playing():
             return
 
-        self._time += step
-
-        x = self._object_radius * np.cos(self._initial_object_phase + self._time * self._object_frequency * 2 * np.pi)
-        y = self._object_radius * np.sin(self._initial_object_phase + self._time * self._object_frequency * 2 * np.pi)
-        z = self._initial_object_position[2]
-
-        self._object.set_world_pose(np.array([x, y, z]))
-
-        self._update_sinusoidal_joint_path(step)
-
-    def _derive_sinusoid_params(self, joint_index: int):
-        # Derive the parameters of the joint target sinusoids for joint {joint_index}
-        start_position = self._lower_joint_limits[joint_index]
-
-        P_max = self._upper_joint_limits[joint_index] - start_position
-        V_max = self._max_joint_speed
-        T = P_max * np.pi / V_max
-
-        # T is the expected time of the joint path
-
-        self._path_duration = T
-        self._calculate_position = (
-            lambda time, path_duration: start_position
-            + -P_max / 2 * np.cos(time * 2 * np.pi / path_duration)
-            + P_max / 2
-        )
-        self._calculate_velocity = lambda time, path_duration: V_max * np.sin(2 * np.pi * time / path_duration)
-
-    def _update_sinusoidal_joint_path(self, step):
-        # Update the target for the robot joints
-        self._joint_time += step
-
-        if self._joint_time > self._path_duration:
-            self._joint_time = 0
-            self._joint_index = (self._joint_index + 1) % self._articulation.num_dof
-            self._derive_sinusoid_params(self._joint_index)
-
-        joint_position_target = self._calculate_position(self._joint_time, self._path_duration)
-        joint_velocity_target = self._calculate_velocity(self._joint_time, self._path_duration)
-
-        action = ArticulationAction(
-            np.array([joint_position_target]),
-            np.array([joint_velocity_target]),
-            joint_indices=np.array([self._joint_index]),
-        )
-        self._articulation.apply_action(action)
+        self.total_time += step_duration
+        omni.log.info(f"update_scenario: step_duration: {step_duration}")
+        omni.log.info(f"update_scenario: total_time: {self.total_time}")
