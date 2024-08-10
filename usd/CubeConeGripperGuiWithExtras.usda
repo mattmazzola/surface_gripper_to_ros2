@@ -7,8 +7,8 @@
                 double radius = 5
             }
             dictionary Perspective = {
-                double3 position = (4.932957521272282, 3.849486589498198, 2.802776236623)
-                double3 target = (-0.0870808356046302, 1.9962533657559114, 0.7140966929836279)
+                double3 position = (4.476158253317509, 3.654877728987201, 1.3570391385052043)
+                double3 target = (-0.6192311091531382, 1.9982868946483097, 0.34649823446241834)
             }
             dictionary Right = {
                 double3 position = (0, -5, 0)
@@ -21,18 +21,17 @@
             string boundCamera = "/OmniverseKit_Persp"
         }
         dictionary omni_layer = {
-            string authoring_layer = "./CubeConeGripperGuiWithExtras.usda"
             dictionary locked = {
             }
             dictionary muteness = {
             }
         }
-        int refinementOverrideImplVersion = 0
+        dictionary physicsSettings = {
+            int "/persistent/simulation/minFrameRate" = 60
+        }
         dictionary renderSettings = {
-            double "rtx:translucency:worldEps" = 0.005
         }
     }
-    defaultPrim = "World"
     endTimeCode = 1000000
     metersPerUnit = 1
     startTimeCode = 0
@@ -40,40 +39,51 @@
     upAxis = "Z"
 )
 
-over "Render" (
-    hide_in_stage_window = true
+def PhysicsScene "physicsScene" (
+    prepend apiSchemas = ["PhysxSceneAPI"]
 )
 {
+    vector3f physics:gravityDirection = (0, 0, -1)
+    float physics:gravityMagnitude = 9.81
+    uniform token physxScene:broadphaseType = "MBP"
+    bool physxScene:enableCCD = 1
+    bool physxScene:enableGPUDynamics = 0
+    bool physxScene:enableStabilization = 1
+    uniform token physxScene:solverType = "TGS"
+    uint physxScene:timeStepsPerSecond = 60
 }
 
-def Xform "World"
+def "World"
 {
-    def Xform "GroundPlane" (
+    def Xform "ground_plane" (
         prepend apiSchemas = ["MaterialBindingAPI"]
     )
     {
-        rel material:binding = </World/Looks/Ground> (
-            bindMaterialAs = "weakerThanDescendants"
+        rel material:binding = </World/Looks/visual_material> (
+            bindMaterialAs = "strongerThanDescendants"
         )
         quatf xformOp:orient = (1, 0, 0, 0)
         float3 xformOp:scale = (1, 1, 1)
-        double3 xformOp:translate = (0, 0, 0)
+        float3 xformOp:translate = (0, 0, 0)
         uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
 
-        def Mesh "CollisionMesh"
+        def Mesh "geom" (
+            prepend apiSchemas = ["PhysicsCollisionAPI", "PhysicsMeshCollisionAPI", "PhysxCollisionAPI"]
+        )
         {
-            uniform bool doubleSided = 0
+            uniform bool doubleSided = 1
             int[] faceVertexCounts = [4]
             int[] faceVertexIndices = [0, 1, 2, 3]
             normal3f[] normals = [(0, 0, 1), (0, 0, 1), (0, 0, 1), (0, 0, 1)]
-            point3f[] points = [(-25, -25, 0), (25, -25, 0), (25, 25, 0), (-25, 25, 0)]
-            color3f[] primvars:displayColor = [(0.5, 0.5, 0.5)]
-            texCoord2f[] primvars:st = [(0, 0), (1, 0), (1, 1), (0, 1)] (
-                interpolation = "varying"
-            )
+            point3f[] points = [(-50, -50, 0), (50, -50, 0), (50, 50, 0), (-50, 50, 0)]
+            color3f[] primvars:displayColor = [(0, 0, 0)]
+            quatd xformOp:orient = (1, 0, 0, 0)
+            double3 xformOp:scale = (1, 1, 1)
+            double3 xformOp:translate = (0, 0, 0)
+            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
         }
 
-        def Plane "CollisionPlane" (
+        def Plane "collisionPlane" (
             prepend apiSchemas = ["PhysicsCollisionAPI"]
         )
         {
@@ -82,18 +92,99 @@ def Xform "World"
         }
     }
 
-    def Cube "Cube" (
-        delete apiSchemas = ["PhysicsRigidBodyAPI", "PhysxRigidBodyAPI", "PhysicsCollisionAPI", "PhysxCollisionAPI"]
-        prepend apiSchemas = ["PhysicsRigidBodyAPI", "PhysxRigidBodyAPI", "PhysicsCollisionAPI", "PhysxCollisionAPI", "MaterialBindingAPI", "PhysicsMassAPI"]
+    def "Physics_Materials"
+    {
+        def Material "physics_material" (
+            prepend apiSchemas = ["PhysicsMaterialAPI"]
+        )
+        {
+            float physics:dynamicFriction = 0.5
+            float physics:restitution = 0.8
+            float physics:staticFriction = 0.5
+        }
+
+        def Material "physics_material_1" (
+            prepend apiSchemas = ["PhysicsMaterialAPI"]
+        )
+        {
+            float physics:dynamicFriction = 1
+            float physics:restitution = 0
+            float physics:staticFriction = 0.2
+        }
+
+        def Material "physics_material_2" (
+            prepend apiSchemas = ["PhysicsMaterialAPI"]
+        )
+        {
+            float physics:dynamicFriction = 1
+            float physics:restitution = 0
+            float physics:staticFriction = 0.2
+        }
+    }
+
+    def "Looks"
+    {
+        def Material "visual_material"
+        {
+            token outputs:surface.connect = </World/Looks/visual_material/shader.outputs:surface>
+
+            def Shader "shader"
+            {
+                uniform token info:id = "UsdPreviewSurface"
+                float3 inputs:diffuseColor = (0.5, 0.5, 0.5)
+                token outputs:surface
+            }
+        }
+
+        def Material "visual_material_1"
+        {
+            token outputs:surface.connect = </World/Looks/visual_material_1/shader.outputs:surface>
+
+            def Shader "shader"
+            {
+                uniform token info:id = "UsdPreviewSurface"
+                float3 inputs:diffuseColor = (0.5, 0.5, 0.5)
+                token outputs:surface
+            }
+        }
+
+        def Material "visual_material_2"
+        {
+            token outputs:surface.connect = </World/Looks/visual_material_2/shader.outputs:surface>
+
+            def Shader "shader"
+            {
+                uniform token info:id = "UsdPreviewSurface"
+                float3 inputs:diffuseColor = (0.5, 0.5, 0.5)
+                token outputs:surface
+            }
+        }
+    }
+
+    def DomeLight "dome_light"
+    {
+        float inputs:intensity = 1000
+    }
+
+    def Cube "cube" (
+        prepend apiSchemas = ["MaterialBindingAPI", "PhysicsCollisionAPI", "PhysicsMeshCollisionAPI", "PhysxCollisionAPI", "PhysicsMassAPI", "PhysicsRigidBodyAPI", "PhysxRigidBodyAPI"]
     )
     {
         float3[] extent = [(-0.5, -0.5, -0.5), (0.5, 0.5, 0.5)]
-        rel material:binding = </World/Looks/CubePlastic> (
-            bindMaterialAs = "weakerThanDescendants"
+        rel material:binding = None (
+            bindMaterialAs = "strongerThanDescendants"
+        )
+        rel material:binding:physics = </World/Physics_Materials/physics_material_1> (
+            bindMaterialAs = "strongerThanDescendants"
         )
         bool physics:collisionEnabled = 1
-        bool physics:kinematicEnabled = 0
-        bool physics:rigidBodyEnabled = 1
+        float physics:mass = 0.02
+        float physxCollision:contactOffset = 0.1
+        float physxCollision:minTorsionalPatchRadius = 0.8
+        float physxCollision:restOffset = 0
+        float physxCollision:torsionalPatchRadius = 1
+        float physxRigidBody:sleepThreshold = 0
+        color3f[] primvars:displayColor = [(0, 0, 1)]
         double size = 1
         quatd xformOp:orient = (1, 0, 0, 0)
         double3 xformOp:scale = (1, 1, 1)
@@ -101,29 +192,43 @@ def Xform "World"
         uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
     }
 
-    def Cone "Cone" (
-        prepend apiSchemas = ["PhysicsRigidBodyAPI", "PhysxRigidBodyAPI", "PhysicsCollisionAPI", "PhysxCollisionAPI", "MaterialBindingAPI", "PhysicsMassAPI"]
+    def Cone "cone" (
+        prepend apiSchemas = ["MaterialBindingAPI", "PhysicsCollisionAPI", "PhysicsMeshCollisionAPI", "PhysxCollisionAPI", "PhysicsMassAPI", "PhysicsRigidBodyAPI", "PhysxRigidBodyAPI"]
     )
     {
-        uniform token axis = "Z"
-        float3[] extent = [(-0.5, -0.5, -0.5), (0.5, 0.5, 0.5)]
+        float3[] extent = [(-1, -1, -0.5), (1, 1, 0.5)]
         double height = 1
-        rel material:binding = </World/Looks/GripperClosed> (
-            bindMaterialAs = "weakerThanDescendants"
+        rel material:binding = None (
+            bindMaterialAs = "strongerThanDescendants"
+        )
+        rel material:binding:physics = </World/Physics_Materials/physics_material_2> (
+            bindMaterialAs = "strongerThanDescendants"
         )
         bool physics:collisionEnabled = 1
-        bool physics:kinematicEnabled = 0
-        bool physics:rigidBodyEnabled = 1
-        double radius = 0.5
+        float physics:mass = 0.02
+        float physxRigidBody:sleepThreshold = 0
+        color3f[] primvars:displayColor = [(0, 1, 0)]
+        double radius = 1
         custom bool refinementEnableOverride = 1
         custom int refinementLevel = 2
-        quatd xformOp:orient = (0.9999999999998287, -5.807530421784597e-7, 6.682376038290526e-8, 2.9585713580144465e-8)
-        double3 xformOp:scale = (1, 1, 1)
-        double3 xformOp:translate = (4.5764508627143785e-8, 0.00000102879039332037, 1.5)
+        quatd xformOp:orient = (1, 0, 0, 0)
+        double3 xformOp:scale = (0.5, 0.5, 1)
+        double3 xformOp:translate = (0, 0, 1.5)
         uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
-    }
 
-    def OmniGraph "ActionGraph"
+        def Xform "gripper_force_origin"
+        {
+            quatd xformOp:orient = (0.7071067690849304, 0, 0.7071067690849304, 0)
+            double3 xformOp:scale = (1, 1, 1)
+            double3 xformOp:translate = (0, 0, -0.5009999871253967)
+            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+        }
+    }
+}
+
+def "graph"
+{
+    def OmniGraph "SurfaceGripperActionGraph"
     {
         token evaluationMode = "Automatic"
         token evaluator:type = "execution"
@@ -131,9 +236,97 @@ def Xform "World"
         int2 fileFormatVersion = (1, 9)
         token pipelineStage = "pipelineStageSimulation"
 
-        def OmniGraphNode "surface_gripper" (
-            prepend apiSchemas = ["NodeGraphNodeAPI"]
-        )
+        def OmniGraphNode "OnImpulseClose"
+        {
+            custom bool inputs:onlyPlayback = 0
+            token node:type = "omni.graph.action.OnImpulseEvent"
+            int node:typeVersion = 3
+            custom uint outputs:execOut (
+                customData = {
+                    bool isExecution = 1
+                }
+            )
+            custom bool state:enableImpulse
+        }
+
+        def OmniGraphNode "OnImpulseOpen"
+        {
+            custom bool inputs:onlyPlayback = 0
+            token node:type = "omni.graph.action.OnImpulseEvent"
+            int node:typeVersion = 3
+            custom uint outputs:execOut (
+                customData = {
+                    bool isExecution = 1
+                }
+            )
+            custom bool state:enableImpulse
+        }
+
+        def OmniGraphNode "OnKeyboardInputClose"
+        {
+            custom bool inputs:altIn
+            custom bool inputs:ctrlIn
+            custom token inputs:keyIn = "C" (
+                allowedTokens = ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z", "Apostrophe", "Backslash", "Backspace", "CapsLock", "Comma", "Del", "Down", "End", "Enter", "Equal", "Escape", "F1", "F10", "F11", "F12", "F2", "F3", "F4", "F5", "F6", "F7", "F8", "F9", "GraveAccent", "Home", "Insert", "Key0", "Key1", "Key2", "Key3", "Key4", "Key5", "Key6", "Key7", "Key8", "Key9", "Left", "LeftAlt", "LeftBracket", "LeftControl", "LeftShift", "LeftSuper", "Menu", "Minus", "NumLock", "Numpad0", "Numpad1", "Numpad2", "Numpad3", "Numpad4", "Numpad5", "Numpad6", "Numpad7", "Numpad8", "Numpad9", "NumpadAdd", "NumpadDel", "NumpadDivide", "NumpadEnter", "NumpadEqual", "NumpadMultiply", "NumpadSubtract", "PageDown", "PageUp", "Pause", "Period", "PrintScreen", "Right", "RightAlt", "RightBracket", "RightControl", "RightShift", "RightSuper", "ScrollLock", "Semicolon", "Slash", "Space", "Tab", "Up"]
+            )
+            custom bool inputs:onlyPlayback = 0
+            custom bool inputs:shiftIn
+            token node:type = "omni.graph.action.OnKeyboardInput"
+            int node:typeVersion = 4
+            custom bool outputs:isPressed
+            custom token outputs:keyOut
+            custom uint outputs:pressed (
+                customData = {
+                    bool isExecution = 1
+                }
+            )
+            custom uint outputs:released (
+                customData = {
+                    bool isExecution = 1
+                }
+            )
+        }
+
+        def OmniGraphNode "OnKeyboardInputOpen"
+        {
+            custom bool inputs:altIn
+            custom bool inputs:ctrlIn
+            custom token inputs:keyIn = "O" (
+                allowedTokens = ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z", "Apostrophe", "Backslash", "Backspace", "CapsLock", "Comma", "Del", "Down", "End", "Enter", "Equal", "Escape", "F1", "F10", "F11", "F12", "F2", "F3", "F4", "F5", "F6", "F7", "F8", "F9", "GraveAccent", "Home", "Insert", "Key0", "Key1", "Key2", "Key3", "Key4", "Key5", "Key6", "Key7", "Key8", "Key9", "Left", "LeftAlt", "LeftBracket", "LeftControl", "LeftShift", "LeftSuper", "Menu", "Minus", "NumLock", "Numpad0", "Numpad1", "Numpad2", "Numpad3", "Numpad4", "Numpad5", "Numpad6", "Numpad7", "Numpad8", "Numpad9", "NumpadAdd", "NumpadDel", "NumpadDivide", "NumpadEnter", "NumpadEqual", "NumpadMultiply", "NumpadSubtract", "PageDown", "PageUp", "Pause", "Period", "PrintScreen", "Right", "RightAlt", "RightBracket", "RightControl", "RightShift", "RightSuper", "ScrollLock", "Semicolon", "Slash", "Space", "Tab", "Up"]
+            )
+            custom bool inputs:onlyPlayback = 0
+            custom bool inputs:shiftIn
+            token node:type = "omni.graph.action.OnKeyboardInput"
+            int node:typeVersion = 4
+            custom bool outputs:isPressed
+            custom token outputs:keyOut
+            custom uint outputs:pressed (
+                customData = {
+                    bool isExecution = 1
+                }
+            )
+            custom uint outputs:released (
+                customData = {
+                    bool isExecution = 1
+                }
+            )
+        }
+
+        def OmniGraphNode "OnPlaybackTick"
+        {
+            token node:type = "omni.graph.action.OnPlaybackTick"
+            int node:typeVersion = 2
+            custom double outputs:deltaSeconds
+            custom double outputs:frame
+            custom uint outputs:tick (
+                customData = {
+                    bool isExecution = 1
+                }
+            )
+            custom double outputs:time
+        }
+
+        def OmniGraphNode "SurfaceGripperNode"
         {
             custom float inputs:BendAngle
             custom uint inputs:Close (
@@ -141,13 +334,16 @@ def Xform "World"
                     bool isExecution = 1
                 }
             )
-            prepend uint inputs:Close.connect = </World/ActionGraph/on_keyboard_input.outputs:pressed>
+            prepend uint inputs:Close.connect = [
+                </graph/SurfaceGripperActionGraph/OnImpulseClose.outputs:execOut>,
+                </graph/SurfaceGripperActionGraph/OnKeyboardInputClose.outputs:pressed>,
+            ]
             custom float inputs:Damping
             custom float inputs:Delta
             custom bool inputs:DisableGravity
             custom bool inputs:enabled
             custom float inputs:ForceLimit
-            custom rel inputs:GripPosition = </World/ActionGraph/GripPosition> (
+            custom rel inputs:GripPosition = </World/cone/gripper_force_origin> (
                 customData = {
                     dictionary omni = {
                         dictionary graph = {
@@ -167,8 +363,11 @@ def Xform "World"
                     bool isExecution = 1
                 }
             )
-            prepend uint inputs:Open.connect = </World/ActionGraph/on_keyboard_input_01.outputs:pressed>
-            custom rel inputs:ParentRigidBody = </World/Cone> (
+            prepend uint inputs:Open.connect = [
+                </graph/SurfaceGripperActionGraph/OnImpulseOpen.outputs:execOut>,
+                </graph/SurfaceGripperActionGraph/OnKeyboardInputOpen.outputs:pressed>,
+            ]
+            custom rel inputs:ParentRigidBody = </World/cone> (
                 customData = {
                     dictionary omni = {
                         dictionary graph = {
@@ -188,104 +387,43 @@ def Xform "World"
                     bool isExecution = 1
                 }
             )
-            uniform token ui:nodegraph:node:expansionState = "open"
-            uniform float2 ui:nodegraph:node:pos = (-1411.6672, -258.80588)
         }
 
-        def OmniGraphNode "on_keyboard_input" (
-            prepend apiSchemas = ["NodeGraphNodeAPI"]
-        )
+        def OmniGraphNode "ROS2Context"
         {
-            custom bool inputs:altIn
-            custom bool inputs:ctrlIn
-            custom token inputs:keyIn = "C" (
-                allowedTokens = ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z", "Apostrophe", "Backslash", "Backspace", "CapsLock", "Comma", "Del", "Down", "End", "Enter", "Equal", "Escape", "F1", "F10", "F11", "F12", "F2", "F3", "F4", "F5", "F6", "F7", "F8", "F9", "GraveAccent", "Home", "Insert", "Key0", "Key1", "Key2", "Key3", "Key4", "Key5", "Key6", "Key7", "Key8", "Key9", "Left", "LeftAlt", "LeftBracket", "LeftControl", "LeftShift", "LeftSuper", "Menu", "Minus", "NumLock", "Numpad0", "Numpad1", "Numpad2", "Numpad3", "Numpad4", "Numpad5", "Numpad6", "Numpad7", "Numpad8", "Numpad9", "NumpadAdd", "NumpadDel", "NumpadDivide", "NumpadEnter", "NumpadEqual", "NumpadMultiply", "NumpadSubtract", "PageDown", "PageUp", "Pause", "Period", "PrintScreen", "Right", "RightAlt", "RightBracket", "RightControl", "RightShift", "RightSuper", "ScrollLock", "Semicolon", "Slash", "Space", "Tab", "Up"]
-            )
-            custom bool inputs:onlyPlayback
-            custom bool inputs:shiftIn
-            token node:type = "omni.graph.action.OnKeyboardInput"
-            int node:typeVersion = 4
-            custom bool outputs:isPressed
-            custom token outputs:keyOut
-            custom uint outputs:pressed (
-                customData = {
-                    bool isExecution = 1
-                }
-            )
-            custom uint outputs:released (
-                customData = {
-                    bool isExecution = 1
-                }
-            )
-            uniform token ui:nodegraph:node:expansionState = "open"
-            uniform float2 ui:nodegraph:node:pos = (-1676.6145, -321.72266)
+            custom uchar inputs:domain_id
+            custom bool inputs:useDomainIDEnvVar
+            token node:type = "omni.isaac.ros2_bridge.ROS2Context"
+            int node:typeVersion = 2
+            custom uint64 outputs:context
         }
 
-        def OmniGraphNode "on_keyboard_input_01" (
-            prepend apiSchemas = ["NodeGraphNodeAPI"]
-        )
-        {
-            custom bool inputs:altIn
-            custom bool inputs:ctrlIn
-            custom token inputs:keyIn = "O" (
-                allowedTokens = ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z", "Apostrophe", "Backslash", "Backspace", "CapsLock", "Comma", "Del", "Down", "End", "Enter", "Equal", "Escape", "F1", "F10", "F11", "F12", "F2", "F3", "F4", "F5", "F6", "F7", "F8", "F9", "GraveAccent", "Home", "Insert", "Key0", "Key1", "Key2", "Key3", "Key4", "Key5", "Key6", "Key7", "Key8", "Key9", "Left", "LeftAlt", "LeftBracket", "LeftControl", "LeftShift", "LeftSuper", "Menu", "Minus", "NumLock", "Numpad0", "Numpad1", "Numpad2", "Numpad3", "Numpad4", "Numpad5", "Numpad6", "Numpad7", "Numpad8", "Numpad9", "NumpadAdd", "NumpadDel", "NumpadDivide", "NumpadEnter", "NumpadEqual", "NumpadMultiply", "NumpadSubtract", "PageDown", "PageUp", "Pause", "Period", "PrintScreen", "Right", "RightAlt", "RightBracket", "RightControl", "RightShift", "RightSuper", "ScrollLock", "Semicolon", "Slash", "Space", "Tab", "Up"]
-            )
-            custom bool inputs:onlyPlayback
-            custom bool inputs:shiftIn
-            token node:type = "omni.graph.action.OnKeyboardInput"
-            int node:typeVersion = 4
-            custom bool outputs:isPressed
-            custom token outputs:keyOut
-            custom uint outputs:pressed (
-                customData = {
-                    bool isExecution = 1
-                }
-            )
-            custom uint outputs:released (
-                customData = {
-                    bool isExecution = 1
-                }
-            )
-            uniform token ui:nodegraph:node:expansionState = "open"
-            uniform float2 ui:nodegraph:node:pos = (-1676.6154, -145.88916)
-        }
-
-        def Xform "GripPosition"
-        {
-            quatd xformOp:orient = (0.7071067811865476, 0, 0.7071067811865476, 0)
-            double3 xformOp:scale = (1, 1, 1)
-            double3 xformOp:translate = (0, 0, 1)
-            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
-        }
-
-        def OmniGraphNode "ros2_publisher" (
-            prepend apiSchemas = ["NodeGraphNodeAPI"]
-        )
+        def OmniGraphNode "ROS2Publisher"
         {
             custom uint64 inputs:context
-            prepend uint64 inputs:context.connect = </World/ActionGraph/ros2_context.outputs:context>
+            prepend uint64 inputs:context.connect = </graph/SurfaceGripperActionGraph/ROS2Context.outputs:context>
             custom double[] inputs:effort
             custom uint inputs:execIn (
                 customData = {
                     bool isExecution = 1
                 }
             )
-            prepend uint inputs:execIn.connect = </World/ActionGraph/on_playback_tick.outputs:tick>
+            prepend uint inputs:execIn.connect = </graph/SurfaceGripperActionGraph/OnPlaybackTick.outputs:tick>
             custom token inputs:header:frame_id
             custom uint inputs:header:stamp:nanosec
-            prepend uint inputs:header:stamp:nanosec.connect = </World/ActionGraph/isaac_time_splitter.outputs:nanoseconds>
+            prepend uint inputs:header:stamp:nanosec.connect = </graph/SurfaceGripperActionGraph/IsaacTimeSplitter.outputs:nanoseconds>
             custom int inputs:header:stamp:sec
-            prepend int inputs:header:stamp:sec.connect = </World/ActionGraph/isaac_time_splitter.outputs:seconds>
+            prepend int inputs:header:stamp:sec.connect = </graph/SurfaceGripperActionGraph/IsaacTimeSplitter.outputs:seconds>
             custom string inputs:messageName = "JointState"
             custom string inputs:messagePackage = "sensor_msgs"
             custom string inputs:messageSubfolder
             custom token[] inputs:name
             custom string inputs:nodeNamespace = "surface_gripper"
             custom double[] inputs:position
-            prepend double[] inputs:position.connect = </World/ActionGraph/make_array_01.outputs:array>
+            prepend double[] inputs:position.connect = </graph/SurfaceGripperActionGraph/ConstructArrayPosition.outputs:array>
             custom string inputs:qosProfile
             custom uint64 inputs:queueSize
-            custom string inputs:topicName = "joint_state"
+            custom string inputs:topicName = "joint_states"
             custom double[] inputs:velocity
             token node:type = "omni.isaac.ros2_bridge.ROS2Publisher"
             int node:typeVersion = 1
@@ -294,142 +432,187 @@ def Xform "World"
                     bool isExecution = 1
                 }
             )
-            uniform token ui:nodegraph:node:expansionState = "open"
-            uniform float2 ui:nodegraph:node:pos = (-289.70117, -135.06474)
         }
 
-        def OmniGraphNode "isaac_read_simulation_time" (
-            prepend apiSchemas = ["NodeGraphNodeAPI"]
-        )
+        def OmniGraphNode "IsaacReadSimulationTime"
         {
-            custom bool inputs:resetOnStop
+            custom bool inputs:resetOnStop = 0
             custom int64 inputs:swhFrameNumber
             token node:type = "omni.isaac.core_nodes.IsaacReadSimulationTime"
             int node:typeVersion = 1
             custom double outputs:simulationTime
-            uniform token ui:nodegraph:node:expansionState = "open"
-            uniform float2 ui:nodegraph:node:pos = (-1180.8193, -250.19104)
         }
 
-        def OmniGraphNode "isaac_time_splitter" (
-            prepend apiSchemas = ["NodeGraphNodeAPI"]
-        )
+        def OmniGraphNode "IsaacTimeSplitter"
         {
             custom token inputs:time
-            prepend token inputs:time.connect = </World/ActionGraph/isaac_read_simulation_time.outputs:simulationTime>
+            prepend token inputs:time.connect = </graph/SurfaceGripperActionGraph/IsaacReadSimulationTime.outputs:simulationTime>
             token node:type = "omni.isaac.core_nodes.IsaacTimeSplitter"
             int node:typeVersion = 1
             custom uint outputs:microseconds
             custom uint outputs:milliseconds
             custom uint outputs:nanoseconds
             custom int outputs:seconds
-            uniform token ui:nodegraph:node:expansionState = "open"
-            uniform float2 ui:nodegraph:node:pos = (-910.83905, -208.61304)
         }
 
-        def OmniGraphNode "on_playback_tick" (
-            prepend apiSchemas = ["NodeGraphNodeAPI"]
-        )
+        def OmniGraphNode "ConstantDoubleOpen"
         {
-            token node:type = "omni.graph.action.OnPlaybackTick"
-            int node:typeVersion = 2
-            custom double outputs:deltaSeconds
-            custom double outputs:frame
-            custom uint outputs:tick (
-                customData = {
-                    bool isExecution = 1
-                }
-            )
-            custom double outputs:time
-            uniform token ui:nodegraph:node:expansionState = "open"
-            uniform float2 ui:nodegraph:node:pos = (-1138.5015, -68.35497)
+            custom double inputs:value = 0
+            token node:type = "omni.graph.nodes.ConstantDouble"
+            int node:typeVersion = 1
         }
 
-        def OmniGraphNode "select_if" (
-            prepend apiSchemas = ["NodeGraphNodeAPI"]
-        )
+        def OmniGraphNode "ConstantDoubleClose"
+        {
+            custom double inputs:value = 1
+            token node:type = "omni.graph.nodes.ConstantDouble"
+            int node:typeVersion = 1
+        }
+
+        def OmniGraphNode "SelectIfPosition"
         {
             custom token inputs:condition
-            prepend token inputs:condition.connect = </World/ActionGraph/surface_gripper.outputs:Closed>
+            prepend token inputs:condition.connect = </graph/SurfaceGripperActionGraph/SurfaceGripperNode.outputs:Closed>
             custom token inputs:ifFalse
-            prepend token inputs:ifFalse.connect = </World/ActionGraph/constant_double.inputs:value>
+            prepend token inputs:ifFalse.connect = </graph/SurfaceGripperActionGraph/ConstantDoubleOpen.inputs:value>
             custom token inputs:ifTrue
-            prepend token inputs:ifTrue.connect = </World/ActionGraph/constant_double_01.inputs:value>
+            prepend token inputs:ifTrue.connect = </graph/SurfaceGripperActionGraph/ConstantDoubleClose.inputs:value>
             token node:type = "omni.graph.nodes.SelectIf"
             int node:typeVersion = 1
             custom token outputs:result
-            uniform token ui:nodegraph:node:expansionState = "open"
-            uniform float2 ui:nodegraph:node:pos = (-1147.0007, 509.94537)
         }
 
-        def OmniGraphNode "make_array_01" (
-            prepend apiSchemas = ["NodeGraphNodeAPI"]
-        )
+        def OmniGraphNode "ConstructArrayPosition"
         {
             custom int inputs:arraySize
             custom token inputs:arrayType (
                 allowedTokens = ["auto", "bool[]", "double[]", "float[]", "half[]", "int[]", "int64[]", "token[]", "uchar[]", "uint[]", "uint64[]", "double[2][]", "double[3][]", "double[4][]", "matrixd[2][]", "matrixd[3][]", "matrixd[4][]", "float[2][]", "float[3][]", "float[4][]", "half[2][]", "half[3][]", "half[4][]", "int[2][]", "int[3][]", "int[4][]", "timecode[]", "frame[4][]", "colord[3][]", "colorf[3][]", "colorh[3][]", "colord[4][]", "colorf[4][]", "colorh[4][]", "normald[3][]", "normalf[3][]", "normalh[3][]", "pointd[3][]", "pointf[3][]", "pointh[3][]", "quatd[4][]", "quatf[4][]", "quath[4][]", "texcoordd[2][]", "texcoordf[2][]", "texcoordh[2][]", "texcoordd[3][]", "texcoordf[3][]", "texcoordh[3][]", "vectord[3][]", "vectorf[3][]", "vectorh[3][]"]
             )
             custom token inputs:input0
-            delete token inputs:input0.connect = </World/ActionGraph/select_if.outputs:result>
-            prepend token inputs:input0.connect = </World/ActionGraph/select_if.outputs:result>
+            delete token inputs:input0.connect = </graph/SurfaceGripperActionGraph/SelectIfPosition.outputs:result>
+            prepend token inputs:input0.connect = </graph/SurfaceGripperActionGraph/SelectIfPosition.outputs:result>
             token node:type = "omni.graph.nodes.ConstructArray"
             int node:typeVersion = 1
             custom token outputs:array
-            uniform token ui:nodegraph:node:expansionState = "open"
-            uniform float2 ui:nodegraph:node:pos = (-917.0499, 527.705)
         }
 
-        def OmniGraphNode "constant_double" (
-            prepend apiSchemas = ["NodeGraphNodeAPI"]
-        )
+        def OmniGraphNode "ConstantColor3fOpen"
         {
-            custom double inputs:value
-            token node:type = "omni.graph.nodes.ConstantDouble"
+            custom color3f inputs:value = (0, 1, 0)
+            token node:type = "omni.graph.nodes.ConstantColor3f"
             int node:typeVersion = 1
-            uniform token ui:nodegraph:node:expansionState = "open"
-            uniform float2 ui:nodegraph:node:pos = (-1400.5498, 575.9604)
         }
 
-        def OmniGraphNode "constant_double_01" (
-            prepend apiSchemas = ["NodeGraphNodeAPI"]
-        )
+        def OmniGraphNode "ConstantColor3fClose"
         {
-            custom double inputs:value = 1
-            token node:type = "omni.graph.nodes.ConstantDouble"
+            custom color3f inputs:value = (1, 0, 0)
+            token node:type = "omni.graph.nodes.ConstantColor3f"
             int node:typeVersion = 1
-            uniform token ui:nodegraph:node:expansionState = "open"
-            uniform float2 ui:nodegraph:node:pos = (-1400.5498, 693.4604)
         }
 
-        def OmniGraphNode "ros2_context" (
-            prepend apiSchemas = ["NodeGraphNodeAPI"]
-        )
+        def OmniGraphNode "SelectIfColor"
         {
-            custom uchar inputs:domain_id
-            custom bool inputs:useDomainIDEnvVar
-            token node:type = "omni.isaac.ros2_bridge.ROS2Context"
-            int node:typeVersion = 2
-            custom uint64 outputs:context
-            uniform token ui:nodegraph:node:expansionState = "open"
-            uniform float2 ui:nodegraph:node:pos = (-1145.3773, -394.45746)
+            custom token inputs:condition
+            prepend token inputs:condition.connect = </graph/SurfaceGripperActionGraph/SurfaceGripperNode.outputs:Closed>
+            custom token inputs:ifFalse
+            prepend token inputs:ifFalse.connect = </graph/SurfaceGripperActionGraph/ConstantColor3fOpen.inputs:value>
+            custom token inputs:ifTrue
+            prepend token inputs:ifTrue.connect = </graph/SurfaceGripperActionGraph/ConstantColor3fClose.inputs:value>
+            token node:type = "omni.graph.nodes.SelectIf"
+            int node:typeVersion = 1
+            custom token outputs:result
         }
 
-        def OmniGraphNode "print_text" (
-            prepend apiSchemas = ["NodeGraphNodeAPI"]
-        )
+        def OmniGraphNode "ConstructArrayColor"
+        {
+            custom int inputs:arraySize
+            custom token inputs:arrayType (
+                allowedTokens = ["auto", "bool[]", "double[]", "float[]", "half[]", "int[]", "int64[]", "token[]", "uchar[]", "uint[]", "uint64[]", "double[2][]", "double[3][]", "double[4][]", "matrixd[2][]", "matrixd[3][]", "matrixd[4][]", "float[2][]", "float[3][]", "float[4][]", "half[2][]", "half[3][]", "half[4][]", "int[2][]", "int[3][]", "int[4][]", "timecode[]", "frame[4][]", "colord[3][]", "colorf[3][]", "colorh[3][]", "colord[4][]", "colorf[4][]", "colorh[4][]", "normald[3][]", "normalf[3][]", "normalh[3][]", "pointd[3][]", "pointf[3][]", "pointh[3][]", "quatd[4][]", "quatf[4][]", "quath[4][]", "texcoordd[2][]", "texcoordf[2][]", "texcoordh[2][]", "texcoordd[3][]", "texcoordf[3][]", "texcoordh[3][]", "vectord[3][]", "vectorf[3][]", "vectorh[3][]"]
+            )
+            custom token inputs:input0
+            delete token inputs:input0.connect = </graph/SurfaceGripperActionGraph/SelectIfColor.outputs:result>
+            prepend token inputs:input0.connect = </graph/SurfaceGripperActionGraph/SelectIfColor.outputs:result>
+            token node:type = "omni.graph.nodes.ConstructArray"
+            int node:typeVersion = 1
+            custom token outputs:array
+        }
+
+        def OmniGraphNode "WriteGripperColor"
         {
             custom uint inputs:execIn (
                 customData = {
                     bool isExecution = 1
                 }
             )
-            prepend uint inputs:execIn.connect = </World/ActionGraph/on_playback_tick.outputs:tick>
+            prepend uint inputs:execIn.connect = </graph/SurfaceGripperActionGraph/OnPlaybackTick.outputs:tick>
+            custom token inputs:name
+            custom rel inputs:prim = </World/cone> (
+                customData = {
+                    dictionary omni = {
+                        dictionary graph = {
+                            string relType = "target"
+                        }
+                    }
+                }
+            )
+            custom token inputs:primPath
+            custom bool inputs:usdWriteBack
+            custom bool inputs:usePath
+            custom token inputs:value
+            prepend token inputs:value.connect = </graph/SurfaceGripperActionGraph/ConstructArrayColor.outputs:array>
+            token node:type = "omni.graph.nodes.WritePrimAttribute"
+            int node:typeVersion = 2
+            custom uint outputs:execOut (
+                customData = {
+                    bool isExecution = 1
+                }
+            )
+            custom bool state:correctlySetup
+            custom uint64 state:destAttrib
+            custom uint64 state:destPath
+            custom uint64 state:destPathToken
+        }
+
+        def OmniGraphNode "ConstantStringOpen"
+        {
+            custom string inputs:value = "Open"
+            token node:type = "omni.graph.nodes.ConstantString"
+            int node:typeVersion = 1
+        }
+
+        def OmniGraphNode "ConstantStringClose"
+        {
+            custom string inputs:value = "Close"
+            token node:type = "omni.graph.nodes.ConstantString"
+            int node:typeVersion = 1
+        }
+
+        def OmniGraphNode "SelectIfGripperState"
+        {
+            custom token inputs:condition
+            prepend token inputs:condition.connect = </graph/SurfaceGripperActionGraph/SurfaceGripperNode.outputs:Closed>
+            custom token inputs:ifFalse
+            prepend token inputs:ifFalse.connect = </graph/SurfaceGripperActionGraph/ConstantStringOpen.inputs:value>
+            custom token inputs:ifTrue
+            prepend token inputs:ifTrue.connect = </graph/SurfaceGripperActionGraph/ConstantStringClose.inputs:value>
+            token node:type = "omni.graph.nodes.SelectIf"
+            int node:typeVersion = 1
+            custom token outputs:result
+        }
+
+        def OmniGraphNode "PrintGripperState"
+        {
+            custom uint inputs:execIn (
+                customData = {
+                    bool isExecution = 1
+                }
+            )
+            prepend uint inputs:execIn.connect = </graph/SurfaceGripperActionGraph/OnPlaybackTick.outputs:tick>
             custom token inputs:logLevel (
                 allowedTokens = ["Info", "Warning", "Error"]
             )
             custom string inputs:text
-            prepend string inputs:text.connect = </World/ActionGraph/insert_string.outputs:string>
+            prepend string inputs:text.connect = </graph/SurfaceGripperActionGraph/SelectIfGripperState.outputs:result>
             custom bool inputs:toScreen = 1
             custom token inputs:viewport
             token node:type = "omni.graph.ui_nodes.PrintText"
@@ -439,389 +622,7 @@ def Xform "World"
                     bool isExecution = 1
                 }
             )
-            uniform token ui:nodegraph:node:expansionState = "open"
-            uniform float2 ui:nodegraph:node:pos = (-684.0698, 29.57173)
         }
-
-        def OmniGraphNode "to_string" (
-            prepend apiSchemas = ["NodeGraphNodeAPI"]
-        )
-        {
-            custom token inputs:value
-            prepend token inputs:value.connect = </World/ActionGraph/surface_gripper.outputs:Closed>
-            token node:type = "omni.graph.nodes.ToString"
-            int node:typeVersion = 1
-            custom string outputs:converted
-            uniform token ui:nodegraph:node:expansionState = "open"
-            uniform float2 ui:nodegraph:node:pos = (-1139.084, 99.913055)
-        }
-
-        def OmniGraphNode "insert_string" (
-            prepend apiSchemas = ["NodeGraphNodeAPI"]
-        )
-        {
-            custom int inputs:index = 9
-            custom token inputs:string = "Closed: " (
-                customData = {
-                    dictionary omni = {
-                        dictionary graph = {
-                            uchar[] attrValue = [67, 108, 111, 115, 101, 100, 58, 32]
-                            string resolvedType = "string"
-                        }
-                    }
-                }
-            )
-            custom token inputs:value
-            prepend token inputs:value.connect = </World/ActionGraph/to_string.outputs:converted>
-            token node:type = "omni.graph.nodes.InsertString"
-            int node:typeVersion = 1
-            custom token outputs:string
-            uniform token ui:nodegraph:node:expansionState = "open"
-            uniform float2 ui:nodegraph:node:pos = (-908.78625, 102.96792)
-        }
-
-        def OmniGraphNode "write_prim_material" (
-            prepend apiSchemas = ["NodeGraphNodeAPI"]
-        )
-        {
-            custom uint inputs:execIn (
-                customData = {
-                    bool isExecution = 1
-                }
-            )
-            prepend uint inputs:execIn.connect = </World/ActionGraph/on_playback_tick.outputs:tick>
-            custom rel inputs:material (
-                customData = {
-                    dictionary omni = {
-                        dictionary graph = {
-                            string relType = "target"
-                        }
-                    }
-                }
-            )
-            custom string inputs:materialPath
-            prepend string inputs:materialPath.connect = </World/ActionGraph/select_if_01.outputs:result>
-            custom rel inputs:prim = </World/Cone> (
-                customData = {
-                    dictionary omni = {
-                        dictionary graph = {
-                            string relType = "target"
-                        }
-                    }
-                }
-            )
-            custom string inputs:primPath = ""
-            token node:type = "omni.graph.nodes.WritePrimMaterial"
-            int node:typeVersion = 1
-            custom uint outputs:execOut (
-                customData = {
-                    bool isExecution = 1
-                }
-            )
-            uniform token ui:nodegraph:node:expansionState = "open"
-            uniform float2 ui:nodegraph:node:pos = (-907.9522, 294.63477)
-        }
-
-        def OmniGraphNode "select_if_01" (
-            prepend apiSchemas = ["NodeGraphNodeAPI"]
-        )
-        {
-            custom token inputs:condition
-            prepend token inputs:condition.connect = </World/ActionGraph/surface_gripper.outputs:Closed>
-            custom token inputs:ifFalse
-            prepend token inputs:ifFalse.connect = </World/ActionGraph/constant_path.inputs:value>
-            custom token inputs:ifTrue
-            prepend token inputs:ifTrue.connect = </World/ActionGraph/constant_path_01.inputs:value>
-            token node:type = "omni.graph.nodes.SelectIf"
-            int node:typeVersion = 1
-            custom token outputs:result
-            uniform token ui:nodegraph:node:expansionState = "open"
-            uniform float2 ui:nodegraph:node:pos = (-1132.0004, 295.96844)
-        }
-
-        def OmniGraphNode "constant_path" (
-            prepend apiSchemas = ["NodeGraphNodeAPI"]
-        )
-        {
-            custom string inputs:value = "/World/Looks/GripperOpen"
-            token node:type = "omni.graph.nodes.ConstantPath"
-            int node:typeVersion = 1
-            uniform token ui:nodegraph:node:expansionState = "open"
-            uniform float2 ui:nodegraph:node:pos = (-1442.8934, 298.11902)
-        }
-
-        def OmniGraphNode "constant_path_01" (
-            prepend apiSchemas = ["NodeGraphNodeAPI"]
-        )
-        {
-            custom string inputs:value = "/World/Looks/GripperClosed"
-            token node:type = "omni.graph.nodes.ConstantPath"
-            int node:typeVersion = 1
-            uniform token ui:nodegraph:node:expansionState = "open"
-            uniform float2 ui:nodegraph:node:pos = (-1447.7411, 401.18622)
-        }
-    }
-
-    def Scope "Looks"
-    {
-        def Material "Ground"
-        {
-            token outputs:mdl:displacement.connect = </World/Looks/Ground/Shader.outputs:out>
-            token outputs:mdl:surface.connect = </World/Looks/Ground/Shader.outputs:out>
-            token outputs:mdl:volume.connect = </World/Looks/Ground/Shader.outputs:out>
-
-            def Shader "Shader"
-            {
-                uniform token info:implementationSource = "sourceAsset"
-                uniform asset info:mdl:sourceAsset = @OmniPBR.mdl@
-                uniform token info:mdl:sourceAsset:subIdentifier = "OmniPBR"
-                color3f inputs:diffuse_color_constant = (0.0018693601, 0.012658238, 0.004327582) (
-                    customData = {
-                        float3 default = (0.2, 0.2, 0.2)
-                    }
-                    displayGroup = "Albedo"
-                    displayName = "Albedo Color"
-                    doc = "This is the albedo base color"
-                    hidden = false
-                    renderType = "color"
-                )
-                token outputs:out (
-                    renderType = "material"
-                )
-            }
-        }
-
-        def Material "Cube"
-        {
-            token outputs:mdl:displacement.connect = </World/Looks/Cube/Shader.outputs:out>
-            token outputs:mdl:surface.connect = </World/Looks/Cube/Shader.outputs:out>
-            token outputs:mdl:volume.connect = </World/Looks/Cube/Shader.outputs:out>
-
-            def Shader "Shader"
-            {
-                uniform token info:implementationSource = "sourceAsset"
-                uniform asset info:mdl:sourceAsset = @OmniPBR.mdl@
-                uniform token info:mdl:sourceAsset:subIdentifier = "OmniPBR"
-                color3f inputs:diffuse_color_constant = (0.034495145, 0.012711649, 0.43037975) (
-                    customData = {
-                        float3 default = (0.2, 0.2, 0.2)
-                    }
-                    displayGroup = "Albedo"
-                    displayName = "Albedo Color"
-                    doc = "This is the albedo base color"
-                    hidden = false
-                    renderType = "color"
-                )
-                float inputs:metallic_constant = 0.24 (
-                    customData = {
-                        float default = 0
-                        dictionary range = {
-                            float max = 1
-                            float min = 0
-                        }
-                    }
-                    displayGroup = "Reflectivity"
-                    displayName = "Metallic Amount"
-                    doc = "Metallic Material"
-                    hidden = false
-                )
-                float inputs:reflection_roughness_constant = 0.17999999 (
-                    customData = {
-                        float default = 0.5
-                        dictionary range = {
-                            float max = 1
-                            float min = 0
-                        }
-                    }
-                    displayGroup = "Reflectivity"
-                    displayName = "Roughness Amount"
-                    doc = "Higher roughness values lead to more blurry reflections"
-                    hidden = false
-                )
-                float inputs:specular_level = 0.59 (
-                    customData = {
-                        float default = 0.5
-                        dictionary soft_range = {
-                            float max = 1
-                            float min = 0
-                        }
-                    }
-                    displayGroup = "Reflectivity"
-                    displayName = "Specular"
-                    doc = "The specular level (intensity) of the material"
-                    hidden = false
-                )
-                token outputs:out (
-                    renderType = "material"
-                )
-            }
-        }
-
-        def Material "GripperClosed"
-        {
-            token outputs:mdl:displacement.connect = </World/Looks/GripperClosed/Shader.outputs:out>
-            token outputs:mdl:surface.connect = </World/Looks/GripperClosed/Shader.outputs:out>
-            token outputs:mdl:volume.connect = </World/Looks/GripperClosed/Shader.outputs:out>
-
-            def Shader "Shader"
-            {
-                uniform token info:implementationSource = "sourceAsset"
-                uniform asset info:mdl:sourceAsset = @OmniPBR.mdl@
-                uniform token info:mdl:sourceAsset:subIdentifier = "OmniPBR"
-                color3f inputs:diffuse_color_constant = (0.8565401, 0, 0) (
-                    customData = {
-                        float3 default = (0.2, 0.2, 0.2)
-                    }
-                    displayGroup = "Albedo"
-                    displayName = "Albedo Color"
-                    doc = "This is the albedo base color"
-                    hidden = false
-                    renderType = "color"
-                )
-                float inputs:metallic_constant = 0.14 (
-                    customData = {
-                        float default = 0
-                        dictionary range = {
-                            float max = 1
-                            float min = 0
-                        }
-                    }
-                    displayGroup = "Reflectivity"
-                    displayName = "Metallic Amount"
-                    doc = "Metallic Material"
-                    hidden = false
-                )
-                token outputs:out (
-                    renderType = "material"
-                )
-            }
-        }
-
-        def Material "GripperOpen"
-        {
-            token outputs:mdl:displacement.connect = </World/Looks/GripperOpen/Shader.outputs:out>
-            token outputs:mdl:surface.connect = </World/Looks/GripperOpen/Shader.outputs:out>
-            token outputs:mdl:volume.connect = </World/Looks/GripperOpen/Shader.outputs:out>
-
-            def Shader "Shader"
-            {
-                uniform token info:implementationSource = "sourceAsset"
-                uniform asset info:mdl:sourceAsset = @OmniPBR.mdl@
-                uniform token info:mdl:sourceAsset:subIdentifier = "OmniPBR"
-                color3f inputs:diffuse_color_constant = (0.07904723, 0.6244726, 0) (
-                    customData = {
-                        float3 default = (0.2, 0.2, 0.2)
-                    }
-                    displayGroup = "Albedo"
-                    displayName = "Albedo Color"
-                    doc = "This is the albedo base color"
-                    hidden = false
-                    renderType = "color"
-                )
-                float inputs:metallic_constant = 0.22999999 (
-                    customData = {
-                        float default = 0
-                        dictionary range = {
-                            float max = 1
-                            float min = 0
-                        }
-                    }
-                    displayGroup = "Reflectivity"
-                    displayName = "Metallic Amount"
-                    doc = "Metallic Material"
-                    hidden = false
-                )
-                token outputs:out (
-                    renderType = "material"
-                )
-            }
-        }
-
-        def Material "GripperDefault"
-        {
-            token outputs:mdl:displacement.connect = </World/Looks/GripperDefault/Shader.outputs:out>
-            token outputs:mdl:surface.connect = </World/Looks/GripperDefault/Shader.outputs:out>
-            token outputs:mdl:volume.connect = </World/Looks/GripperDefault/Shader.outputs:out>
-
-            def Shader "Shader"
-            {
-                uniform token info:implementationSource = "sourceAsset"
-                uniform asset info:mdl:sourceAsset = @OmniPBR.mdl@
-                uniform token info:mdl:sourceAsset:subIdentifier = "OmniPBR"
-                token outputs:out (
-                    renderType = "material"
-                )
-            }
-        }
-
-        def Material "CubePlastic"
-        {
-            token outputs:mdl:displacement.connect = </World/Looks/CubePlastic/Shader.outputs:out>
-            token outputs:mdl:surface.connect = </World/Looks/CubePlastic/Shader.outputs:out>
-            token outputs:mdl:volume.connect = </World/Looks/CubePlastic/Shader.outputs:out>
-
-            def Shader "Shader"
-            {
-                uniform token info:implementationSource = "sourceAsset"
-                uniform asset info:mdl:sourceAsset = @OmniSurfacePresets.mdl@
-                uniform token info:mdl:sourceAsset:subIdentifier = "OmniSurface_Plastic"
-                color3f inputs:diffuse_reflection_color = (0, 0.040571347, 0.21097046) (
-                    customData = {
-                        float3 default = (0.105, 0.242, 0.818)
-                    }
-                    displayGroup = "Base"
-                    displayName = "Color"
-                    hidden = false
-                    renderType = "color"
-                )
-                token outputs:out (
-                    renderType = "material"
-                )
-            }
-        }
-    }
-}
-
-def Xform "Environment"
-{
-    quatd xformOp:orient = (1, 0, 0, 0)
-    double3 xformOp:scale = (1, 1, 1)
-    double3 xformOp:translate = (0, 0, 0)
-    uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
-
-    def DistantLight "defaultLight" (
-        prepend apiSchemas = ["ShapingAPI"]
-    )
-    {
-        float inputs:angle = 1
-        float inputs:colorTemperature = 6520.7
-        float inputs:intensity = 3000
-        float inputs:shaping:cone:angle = 180
-        float inputs:shaping:cone:softness
-        float inputs:shaping:focus
-        color3f inputs:shaping:focusTint
-        asset inputs:shaping:ies:file
-        quatd xformOp:orient = (0.6532814824381882, 0.2705980500730985, 0.27059805007309856, 0.6532814824381883)
-        double3 xformOp:scale = (1, 1, 1)
-        double3 xformOp:translate = (0, 0, 0)
-        uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
-    }
-
-    def DomeLight "DomeLight" (
-        prepend apiSchemas = ["ShapingAPI"]
-    )
-    {
-        float inputs:intensity = 1000
-        float inputs:shaping:cone:angle = 180
-        float inputs:shaping:cone:softness
-        float inputs:shaping:focus
-        color3f inputs:shaping:focusTint
-        asset inputs:shaping:ies:file
-        token inputs:texture:format = "latlong"
-        quatd xformOp:orient = (1, 0, 0, 0)
-        double3 xformOp:scale = (1, 1, 1)
-        double3 xformOp:translate = (0, 0, 3.7795532056714345)
-        uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
     }
 }
 
