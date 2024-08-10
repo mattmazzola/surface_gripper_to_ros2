@@ -28,6 +28,7 @@ class UIBuilder:
         if event.type == int(omni.timeline.TimelineEventType.STOP):
             self._run_stop_btn.reset()
             self._run_stop_btn.enabled = False
+            self._gripper_state_btn.enabled = False
 
     def on_stage_event(self, event):
         if event.type == int(StageEventType.OPENED):
@@ -72,6 +73,20 @@ class UIBuilder:
                 self._run_stop_btn.enabled = False
                 self.wrapped_ui_elements.append(self._run_stop_btn)
 
+        robot_actions_frame = CollapsableFrame("Robot Actions", collapsed=False)
+
+        with robot_actions_frame:
+            with ui.VStack(style=get_style(), spacing=5, height=0):
+                self._gripper_state_btn = StateButton(
+                    "Gripper State",
+                    "Close",
+                    "Open",
+                    on_a_click_fn=self._on_click_gripper_close,
+                    on_b_click_fn=self._on_click_gripper_open,
+                )
+                self._gripper_state_btn.enabled = False
+                self.wrapped_ui_elements.append(self._gripper_state_btn)
+
     def _on_setup_scene(self):
         self._scenario.init_scenario()
 
@@ -96,6 +111,7 @@ class UIBuilder:
     def _reset_ui(self):
         self._run_stop_btn.reset()
         self._run_stop_btn.enabled = False
+        self._gripper_state_btn.enabled = False
         self._reset_btn.enabled = False
 
     def _on_post_reset_btn(self):
@@ -104,12 +120,20 @@ class UIBuilder:
         # UI management
         self._run_stop_btn.reset()
         self._run_stop_btn.enabled = True
+        self._gripper_state_btn.enabled = False
 
     def _on_physics_step(self, step_duration: float):
         self._scenario.on_physics_step(step_duration)
 
     def _on_click_run(self):
+        self._gripper_state_btn.enabled = True
         self._timeline.play()
 
     def _on_click_stop(self):
         self._timeline.pause()
+
+    def _on_click_gripper_close(self):
+        self._scenario.close_gripper()
+
+    def _on_click_gripper_open(self):
+        self._scenario.open_gripper()

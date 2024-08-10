@@ -232,5 +232,21 @@ class SurfaceGripperToRos2Scenario(ScenarioBase):
             return
 
         self.total_time += step_duration
-        omni.log.info(f"update_scenario: step_duration: {step_duration}")
-        omni.log.info(f"update_scenario: total_time: {self.total_time}")
+        omni.log.verbose(f"update_scenario: step_duration: {step_duration}")
+        omni.log.verbose(f"update_scenario: total_time: {self.total_time}")
+
+    def close_gripper(self):
+        if omni.timeline.get_timeline_interface().is_playing():
+            og.Controller.set(
+                og.Controller.attribute("/graph/SurfaceGripperActionGraph/OnImpulseClose.state:enableImpulse"),
+                True,
+            )
+            omni.log.info(f"close_gripper")
+
+    def open_gripper(self):
+        if omni.timeline.get_timeline_interface().is_playing():
+            og.Controller.set(
+                og.Controller.attribute("/graph/SurfaceGripperActionGraph/OnImpulseOpen.state:enableImpulse"),
+                True,
+            )
+            omni.log.info(f"open_gripper")
